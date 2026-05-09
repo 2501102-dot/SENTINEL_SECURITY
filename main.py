@@ -19,4 +19,4 @@ def open_browser():
 threading.Thread(target=open_browser, daemon=True).start()
 
 start_system()
-socketio.run(app, host="0.0.0.0", port=port, debug=False)
+socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)
