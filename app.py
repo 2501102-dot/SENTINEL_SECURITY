@@ -33,10 +33,10 @@ FRAME_EMIT_INTERVAL_SECONDS = 1.0 / 12.0  # 12 FPS
 ALLOWED_MODES = {"SIMPLE", "ALERT"}
 
 CAMERAS_CONFIG = [
-    {"id": "CAM-01", "label": "Main Entrance", "source": "videos/demo-01.mp4"},
-    {"id": "CAM-02", "label": "Parking Zone", "source": "videos/demo-02.mp4"},
-    {"id": "CAM-03", "label": "Server Room", "source": "videos/demo-03.mp4"},
-    {"id": "CAM-04", "label": "Emergency Exit", "source": "videos/demo-04.mp4"},
+    {"id": "CAM-01", "label": "Main Entrance", "source": "videos/demo1.mp4"},
+    {"id": "CAM-02", "label": "Parking Zone", "source": "videos/demo2.mp4"},
+    {"id": "CAM-03", "label": "Server Room", "source": "videos/demo3.mp4"},
+    {"id": "CAM-04", "label": "Emergency Exit", "source": "videos/demo4.mp4"},
 ]
 
 DEMO_VIDEO_URLS = [
@@ -47,10 +47,10 @@ DEMO_VIDEO_URLS = [
 ]
 
 DEMO_VIDEO_FILES = [
-    "videos/demo-01.mp4",
-    "videos/demo-02.mp4",
-    "videos/demo-03.mp4",
-    "videos/demo-04.mp4",
+    "videos/demo1.mp4",
+    "videos/demo2.mp4",
+    "videos/demo3.mp4",
+    "videos/demo4.mp4",
 ]
 
 def _coerce_camera_source(value):
@@ -87,6 +87,22 @@ def _download_file(url, dst_path):
 def ensure_demo_videos():
     base_dir = os.path.dirname(__file__)
     download_ok = True
+    target_files = {os.path.normpath(os.path.join(base_dir, rel_path)) for rel_path in DEMO_VIDEO_FILES}
+
+    legacy_files = [
+        os.path.normpath(os.path.join(base_dir, "videos/demo-01.mp4")),
+        os.path.normpath(os.path.join(base_dir, "videos/demo-02.mp4")),
+        os.path.normpath(os.path.join(base_dir, "videos/demo-03.mp4")),
+        os.path.normpath(os.path.join(base_dir, "videos/demo-04.mp4")),
+    ]
+
+    for legacy_path in legacy_files:
+        if os.path.exists(legacy_path) and legacy_path not in target_files:
+            try:
+                os.remove(legacy_path)
+                print(f"[APP] Removed legacy demo video: {os.path.relpath(legacy_path, base_dir)}")
+            except Exception as exc:
+                print(f"[APP] Could not remove legacy demo video {legacy_path}: {exc}")
 
     for rel_path, url in zip(DEMO_VIDEO_FILES, DEMO_VIDEO_URLS):
         abs_path = os.path.normpath(os.path.join(base_dir, rel_path))

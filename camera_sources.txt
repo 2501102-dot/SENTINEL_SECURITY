@@ -1,6 +1,6 @@
 # SENTINEL camera sources for cloud deployment (exactly 4 lines)
 # These local files are auto-downloaded at startup into the writable videos/ folder.
-videos/demo-01.mp4
-videos/demo-02.mp4
-videos/demo-03.mp4
-videos/demo-04.mp4
+videos/demo1.mp4
+videos/demo2.mp4
+videos/demo3.mp4
+videos/demo4.mp4
