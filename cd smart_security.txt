@@ -1,0 +1,4 @@
+cd smart_security
+.\.venv\Scripts\Activate.ps1
+$env:SMARTSEC_MODE="ALERT"
+.\.venv\Scripts\python.exe main.py
