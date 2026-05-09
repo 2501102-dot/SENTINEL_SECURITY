@@ -156,6 +156,17 @@ detectors = []
 notifier = NotificationService()
 
 
+def stop_detectors():
+    """Stop and clear all running AI detector threads."""
+    global detectors
+    for d in list(detectors):
+        try:
+            d.stop()
+        except Exception:
+            pass
+    detectors = []
+
+
 def _normalize_mode(value):
     mode = str(value or "").strip().upper()
     return mode if mode in ALLOWED_MODES else "SIMPLE"
@@ -341,3 +352,18 @@ def start_system():
 if __name__ == "__main__":
     start_system()
     socketio.run(app, host="0.0.0.0", port=5000, debug=False)
+
+
+@app.route('/admin/refresh_videos', methods=['POST'])
+def admin_refresh_videos():
+    """Admin endpoint: refresh demo videos and restart detectors.
+
+    Call this after deploy to force download fresh demo clips and restart
+    the AI detector threads without redeploying the container.
+    """
+    ok = ensure_demo_videos()
+    load_camera_sources()
+    stop_detectors()
+    t = threading.Thread(target=start_detectors, daemon=True)
+    t.start()
+    return jsonify({"ok": ok})
