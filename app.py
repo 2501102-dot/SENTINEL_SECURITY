@@ -40,10 +40,10 @@ CAMERAS_CONFIG = [
 ]
 
 DEMO_VIDEO_URLS = [
-    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/big_buck_bunny.mp4",
-    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/echo-hereweare.mp4",
-    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/big_buck_bunny.mp4",
-    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/echo-hereweare.mp4",
+    "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+    "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
+    "https://samplelib.com/lib/preview/mp4/sample-15s.mp4",
+    "https://samplelib.com/lib/preview/mp4/sample-20s.mp4",
 ]
 
 DEMO_VIDEO_FILES = [
@@ -80,8 +80,10 @@ def _download_file(url, dst_path):
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
     headers = {"User-Agent": "Mozilla/5.0"}
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=60) as response, open(dst_path, "wb") as out:
+    tmp_path = f"{dst_path}.tmp"
+    with urllib.request.urlopen(req, timeout=60) as response, open(tmp_path, "wb") as out:
         out.write(response.read())
+    os.replace(tmp_path, dst_path)
 
 
 def ensure_demo_videos():
@@ -106,10 +108,7 @@ def ensure_demo_videos():
 
     for rel_path, url in zip(DEMO_VIDEO_FILES, DEMO_VIDEO_URLS):
         abs_path = os.path.normpath(os.path.join(base_dir, rel_path))
-        if os.path.exists(abs_path) and os.path.getsize(abs_path) > 1024 * 1024:
-            continue
-
-        print(f"[APP] Downloading demo video: {rel_path}")
+        print(f"[APP] Refreshing demo video: {rel_path}")
         try:
             _download_file(url, abs_path)
             print(f"[APP] Saved demo video: {rel_path}")
