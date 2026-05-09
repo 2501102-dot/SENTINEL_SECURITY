@@ -23,7 +23,7 @@ smart_security/
 |- requirements.txt
 |- templates/
 |  |- index.html
-|- videos/
+|- yolov8n.pt (AI model - auto-downloaded on first run)
 ```
 
 ## Requirements
@@ -67,15 +67,23 @@ Open notification_config.json and fill your real values:
 4. ULTRAMSG_TOKEN
 5. ULTRAMSG_TO
 
-### 6) Prepare 4 demo sources
-camera_sources.txt should contain exactly 4 lines (already provided in this project).
+### 6) Configure camera sources
+Edit `camera_sources.txt` and add 4 camera/video source URLs (one per line).
 
-Example:
+Supported formats:
 ```text
-videos/demo1.mp4
-videos/demo2.mp4
-videos/demo3.mp4
-videos/demo4.mp4
+0                                          # Webcam (index)
+rtsp://user:pass@192.168.1.100:554/stream # RTSP stream
+http://192.168.1.100:8080/video.mjpeg     # HTTP MJPEG stream
+/path/to/video.mp4                        # Local video file
+```
+
+Example for testing (with 4 webcam indices):
+```text
+0
+0
+0
+0
 ```
 
 ## Run Commands

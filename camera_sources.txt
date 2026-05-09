@@ -1,12 +1,18 @@
-# SENTINEL camera sources (one per line)
-# Supported values:
-# - Webcam index: 0
-# - RTSP stream: rtsp://user:pass@ip:554/stream
-# - HTTP MJPEG: http://host/path.mjpeg
-# - Local file : videos/demo_busy_street.mp4
+# SENTINEL camera sources (one per line - must have exactly 4 lines)
+# Supported formats:
+#   - Webcam index: 0
+#   - RTSP stream: rtsp://user:pass@ip:554/stream
+#   - HTTP MJPEG: http://host/path.mjpeg
+#   - Local file: /path/to/video.mp4
 #
-# Keep legal/public/authorized feeds only.
-# If you provide fewer than 4 lines, the last line is reused.
+# Keep only legal/public/authorized feeds.
+# If fewer than 4 lines provided, the last line is reused to fill 4 slots.
+
+# Example: using local webcam (index 0) for all 4 slots
+0
+0
+0
+0
 
 # Example setup without webcam (replace with your own valid sources):
 videos/demo1.mp4
