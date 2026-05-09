@@ -1,6 +1,6 @@
 # SENTINEL camera sources for cloud deployment (exactly 4 lines)
-# These are public demo MP4 URLs reachable from Railway.
-https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
-https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
-https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
-https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4
+# These local files are auto-downloaded at startup into the writable videos/ folder.
+videos/demo-01.mp4
+videos/demo-02.mp4
+videos/demo-03.mp4
+videos/demo-04.mp4

@@ -3,6 +3,7 @@
 import time
 import threading
 import os
+import urllib.request
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
@@ -32,10 +33,24 @@ FRAME_EMIT_INTERVAL_SECONDS = 1.0 / 12.0  # 12 FPS
 ALLOWED_MODES = {"SIMPLE", "ALERT"}
 
 CAMERAS_CONFIG = [
-    {"id": "CAM-01", "label": "Main Entrance", "source": 0},
-    {"id": "CAM-02", "label": "Parking Zone", "source": 0},
-    {"id": "CAM-03", "label": "Server Room", "source": 0},
-    {"id": "CAM-04", "label": "Emergency Exit", "source": 0},
+    {"id": "CAM-01", "label": "Main Entrance", "source": "videos/demo-01.mp4"},
+    {"id": "CAM-02", "label": "Parking Zone", "source": "videos/demo-02.mp4"},
+    {"id": "CAM-03", "label": "Server Room", "source": "videos/demo-03.mp4"},
+    {"id": "CAM-04", "label": "Emergency Exit", "source": "videos/demo-04.mp4"},
+]
+
+DEMO_VIDEO_URLS = [
+    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/big_buck_bunny.mp4",
+    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/echo-hereweare.mp4",
+    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/big_buck_bunny.mp4",
+    "https://raw.githubusercontent.com/mediaelement/mediaelement-files/master/echo-hereweare.mp4",
+]
+
+DEMO_VIDEO_FILES = [
+    "videos/demo-01.mp4",
+    "videos/demo-02.mp4",
+    "videos/demo-03.mp4",
+    "videos/demo-04.mp4",
 ]
 
 def _coerce_camera_source(value):
@@ -61,6 +76,34 @@ def _resolve_source_path(source):
     return os.path.normpath(os.path.join(base_dir, s))
 
 
+def _download_file(url, dst_path):
+    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+    headers = {"User-Agent": "Mozilla/5.0"}
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as response, open(dst_path, "wb") as out:
+        out.write(response.read())
+
+
+def ensure_demo_videos():
+    base_dir = os.path.dirname(__file__)
+    download_ok = True
+
+    for rel_path, url in zip(DEMO_VIDEO_FILES, DEMO_VIDEO_URLS):
+        abs_path = os.path.normpath(os.path.join(base_dir, rel_path))
+        if os.path.exists(abs_path) and os.path.getsize(abs_path) > 1024 * 1024:
+            continue
+
+        print(f"[APP] Downloading demo video: {rel_path}")
+        try:
+            _download_file(url, abs_path)
+            print(f"[APP] Saved demo video: {rel_path}")
+        except Exception as exc:
+            download_ok = False
+            print(f"[APP] Failed to download {url}: {exc}")
+
+    return download_ok
+
+
 def load_camera_sources():
     # Load camera sources from camera_sources.txt (one per line)
     # Can be: 0 (webcam), /path/to/video.mp4, or rtsp://...
@@ -79,7 +122,7 @@ def load_camera_sources():
         print("[APP] SMARTSEC_CAMERA_SOURCES env var is set but camera_sources.txt takes priority")
 
     if not raw_sources:
-        return
+        raw_sources = DEMO_VIDEO_FILES[:]
 
     sources = [_resolve_source_path(_coerce_camera_source(v)) for v in raw_sources]
     for idx, cam in enumerate(CAMERAS_CONFIG):
@@ -262,6 +305,7 @@ def start_detectors():
         time.sleep(0.4)
 
 def start_system():
+    ensure_demo_videos()
     load_camera_sources()
     db.init_db()
     db.log_system_event("System started")
