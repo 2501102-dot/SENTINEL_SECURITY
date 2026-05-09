@@ -30,5 +30,8 @@ RUN pip install --upgrade pip && \
 # Expose Flask port
 EXPOSE 5000
 
-# Run application
-CMD ["python", "main.py"]
+# Set production environment
+ENV FLASK_ENV=production
+
+# Run application with gunicorn and eventlet worker (production-safe)
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "--timeout", "300", "--access-logfile", "-", "main:app"]
