@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+.venv_msys
+__pycache__
+*.pyc
+*.pyo
+*.db
+.DS_Store
+security_logs.db
+videos/
+*.mp4
+.env
