@@ -1,21 +1,6 @@
-# SENTINEL camera sources (one per line - must have exactly 4 lines)
-# Supported formats:
-#   - Webcam index: 0
-#   - RTSP stream: rtsp://user:pass@ip:554/stream
-#   - HTTP MJPEG: http://host/path.mjpeg
-#   - Local file: /path/to/video.mp4
-#
-# Keep only legal/public/authorized feeds.
-# If fewer than 4 lines provided, the last line is reused to fill 4 slots.
-
-# Example: using local webcam (index 0) for all 4 slots
-0
-0
-0
-0
-
-# Example setup without webcam (replace with your own valid sources):
-videos/demo1.mp4
-videos/demo2.mp4
-videos/demo3.mp4
-videos/demo4.mp4
+# SENTINEL camera sources for cloud deployment (exactly 4 lines)
+# These are public demo MP4 URLs reachable from Railway.
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4
