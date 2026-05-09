@@ -60,6 +60,7 @@ class AIDetector:
         self.min_loop_fps = float(max(5, int(os.getenv('SMARTSEC_STREAM_MIN_FPS', '8'))))
         self.capture_skip = int(max(0, int(os.getenv('SMARTSEC_CAPTURE_SKIP', '1'))))
         self.adaptive_load_enabled = str(os.getenv('SMARTSEC_ADAPTIVE_LOAD', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
+        self.fallback_to_simulation = str(os.getenv('SMARTSEC_FALLBACK_SIMULATION', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
         self.dynamic_loop_fps = self.target_loop_fps
         self.dynamic_infer_every_n = self.infer_every_n
         self._util_ema = 0.0
@@ -101,12 +102,12 @@ class AIDetector:
     def _run_yolo(self):
         if isinstance(self.source, str) and not self.source.lower().startswith(("rtsp://", "http://", "https://")):
             if not os.path.exists(self.source):
-                self._run_no_signal(f"Source file missing: {self.source}")
+                self._handle_source_failure(f"Source file missing: {self.source}")
                 return
 
         self.cap = cv2.VideoCapture(self.source)
         if not self.cap.isOpened():
-            self._run_no_signal(f"Cannot open source: {self.source}")
+            self._handle_source_failure(f"Cannot open source: {self.source}")
             return
 
         t_prev = time.time()
@@ -193,6 +194,14 @@ class AIDetector:
 
         self.cap.release()
 
+    def _handle_source_failure(self, reason):
+        print(f"[AI] {reason}")
+        if self.fallback_to_simulation:
+            print(f"[AI] {self.camera_id}: switching to simulation fallback")
+            self._run_simulation(source_failed=True)
+            return
+        self._run_no_signal(reason)
+
     def _run_inference(self, frame):
         """Run detection on resized frame and map boxes back to original resolution."""
         H, W = frame.shape[:2]
@@ -252,7 +261,7 @@ class AIDetector:
             time.sleep(0.5)
 
     # ── SIMULATION mode (no webcam / no YOLO) ─────────────────────────────────
-    def _run_simulation(self):
+    def _run_simulation(self, source_failed=False):
         """Generates a fake camera feed with animated objects for demo."""
         import random, math
         W, H = 640, 480
@@ -291,6 +300,11 @@ class AIDetector:
                 if alert_tick > 120:
                     self._maybe_alert("person", p["conf"], "MEDIUM")
                     alert_tick = 0
+
+            if source_failed:
+                cv2.rectangle(frame, (14, 42), (420, 72), (0, 90, 160), -1)
+                cv2.putText(frame, "DEMO MODE - SOURCE UNAVAILABLE",
+                            (20, 63), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
             frame = self._draw_hud(frame, len(persons))
             self._send_frame(frame)
