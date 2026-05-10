@@ -8,6 +8,13 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 
+# Disable eventlet's multiple-reader prevention to allow concurrent frame emissions
+try:
+    import eventlet
+    eventlet.debug.hub_prevent_multiple_readers(False)
+except Exception:
+    pass
+
 import database as db
 import mqtt_client as mqtt
 from ai_detector import AIDetector
@@ -28,6 +35,7 @@ state = {
     "mode": os.getenv("SMARTSEC_MODE", "SIMPLE").strip().upper(),
 }
 _lock = threading.Lock()
+_emit_lock = threading.Lock()  # Serialize SocketIO emissions to prevent concurrent writes
 FRAME_EMIT_INTERVAL_SECONDS = 1.0 / 12.0  # 12 FPS
 
 ALLOWED_MODES = {"SIMPLE", "ALERT"}
@@ -209,11 +217,12 @@ def on_alert(camera_id, event_type, confidence, details, threat_level):
         notifier.notify_intrusion(camera_id, confidence, threat_level, details)
 
     # Broadcast to dashboard clients
-    socketio.emit("new_alert", alert)
-    socketio.emit("threat_update", {
-        "level": state["threat_level"],
-        "total": state["total_alerts"]
-    })
+    with _emit_lock:
+        socketio.emit("new_alert", alert)
+        socketio.emit("threat_update", {
+            "level": state["threat_level"],
+            "total": state["total_alerts"]
+        })
 
 
 def on_frame(camera_id, frame_b64):
@@ -231,7 +240,8 @@ def on_frame(camera_id, frame_b64):
             state["cameras"][camera_id]["last_emit_ts"] = now
 
     if should_emit:
-        socketio.emit("frame_update", {"camera_id": camera_id, "frame": frame_b64})
+        with _emit_lock:
+            socketio.emit("frame_update", {"camera_id": camera_id, "frame": frame_b64})
 
 # API Routes
 @app.route("/")
@@ -260,7 +270,8 @@ def api_state():
 def reset_threat():
     with _lock:
         state["threat_level"] = "SAFE"
-    socketio.emit("threat_update", {"level": "SAFE", "total": state["total_alerts"]})
+    with _emit_lock:
+        socketio.emit("threat_update", {"level": "SAFE", "total": state["total_alerts"]})
     return jsonify({"ok": True})
 
 @app.route("/api/mode", methods=["GET", "POST"])
@@ -275,11 +286,12 @@ def api_mode():
         if mode == "SIMPLE":
             state["threat_level"] = "SAFE"
 
-    socketio.emit("mode_update", {"mode": state["mode"]})
-    socketio.emit("threat_update", {
-        "level": state["threat_level"],
-        "total": state["total_alerts"]
-    })
+    with _emit_lock:
+        socketio.emit("mode_update", {"mode": state["mode"]})
+        socketio.emit("threat_update", {
+            "level": state["threat_level"],
+            "total": state["total_alerts"]
+        })
     return jsonify({"ok": True, "mode": state["mode"]})
 
 @app.route("/api/alerts")
