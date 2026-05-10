@@ -8,6 +8,4 @@ __pycache__
 *.db
 .DS_Store
 security_logs.db
-videos/
-*.mp4
 .env
