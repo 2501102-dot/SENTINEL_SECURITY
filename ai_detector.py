@@ -60,7 +60,7 @@ class AIDetector:
         self.min_loop_fps = float(max(5, int(os.getenv('SMARTSEC_STREAM_MIN_FPS', '8'))))
         self.capture_skip = int(max(0, int(os.getenv('SMARTSEC_CAPTURE_SKIP', '1'))))
         self.adaptive_load_enabled = str(os.getenv('SMARTSEC_ADAPTIVE_LOAD', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
-        self.fallback_to_simulation = str(os.getenv('SMARTSEC_FALLBACK_SIMULATION', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
+        self.fallback_to_simulation = False  # ALWAYS use real video sources, NEVER fallback
         self.dynamic_loop_fps = self.target_loop_fps
         self.dynamic_infer_every_n = self.infer_every_n
         self._util_ema = 0.0

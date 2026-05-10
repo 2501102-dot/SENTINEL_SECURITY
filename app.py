@@ -149,7 +149,11 @@ def load_camera_sources():
         src = cam["source"]
         if isinstance(src, str) and not src.lower().startswith(("rtsp://", "http://", "https://")):
             exists = os.path.exists(src)
-            print(f"[APP]  {cam['id']}: {src} (exists={exists})")
+            size_info = ""
+            if exists:
+                size_mb = os.path.getsize(src) / (1024*1024)
+                size_info = f" ({size_mb:.1f}MB)"
+            print(f"[APP]  {cam['id']}: {src} (exists={exists}){size_info}")
         else:
             print(f"[APP]  {cam['id']}: {src}")
 
@@ -311,6 +315,39 @@ def api_test_notification():
     result = notifier.send_test_message()
     code = 200 if result.get("ok") else 400
     return jsonify(result), code
+
+@app.route("/api/health", methods=["GET"])
+def api_health():
+    """Health check endpoint: verify videos exist and cameras are configured."""
+    cameras_status = []
+    for cam in CAMERAS_CONFIG:
+        src = cam["source"]
+        if isinstance(src, str) and not src.lower().startswith(("rtsp://", "http://", "https://")):
+            exists = os.path.exists(src)
+            size_mb = 0
+            if exists:
+                size_mb = round(os.path.getsize(src) / (1024*1024), 2)
+            cameras_status.append({
+                "id": cam["id"],
+                "label": cam["label"],
+                "source": src,
+                "exists": exists,
+                "size_mb": size_mb if exists else None
+            })
+        else:
+            cameras_status.append({
+                "id": cam["id"],
+                "label": cam["label"],
+                "source": src,
+                "exists": "remote_stream"
+            })
+    
+    return jsonify({
+        "status": "ok",
+        "mode": state["mode"],
+        "cameras": cameras_status,
+        "detectors_running": len(detectors)
+    })
 
 # WebSocket events
 @socketio.on("connect")
