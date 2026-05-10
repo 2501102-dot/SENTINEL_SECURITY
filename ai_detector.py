@@ -55,13 +55,18 @@ class AIDetector:
         self.infer_every_n = int(max(1, int(os.getenv('SMARTSEC_INFER_EVERY_N', '4'))))
         self.max_infer_width = int(max(480, int(os.getenv('SMARTSEC_INFER_MAX_WIDTH', '640'))))
         self.stream_max_width = int(max(480, int(os.getenv('SMARTSEC_STREAM_MAX_WIDTH', '640'))))
-        self.stream_jpeg_quality = int(max(40, min(95, int(os.getenv('SMARTSEC_STREAM_JPEG_QUALITY', '52')))))
+        # Lower default JPEG quality to reduce payload size and CPU encoding time
+        self.stream_jpeg_quality = int(max(40, min(95, int(os.getenv('SMARTSEC_STREAM_JPEG_QUALITY', '45')))))
         self.target_loop_fps = float(max(5, int(os.getenv('SMARTSEC_STREAM_FPS', '12'))))
         self.min_loop_fps = float(max(5, int(os.getenv('SMARTSEC_STREAM_MIN_FPS', '8'))))
         self.capture_skip = int(max(0, int(os.getenv('SMARTSEC_CAPTURE_SKIP', '1'))))
         self.adaptive_load_enabled = str(os.getenv('SMARTSEC_ADAPTIVE_LOAD', '1')).strip().lower() not in ('0', 'false', 'no', 'off')
         self.fallback_to_simulation = False  # ALWAYS use real video sources, NEVER fallback
         self.dynamic_loop_fps = self.target_loop_fps
+        self._last_sent_gray = None
+        # Threshold for mean absolute difference when comparing downscaled grayscale frames.
+        # If mean diff < threshold, we consider frame unchanged and skip emitting.
+        self.frame_change_threshold = float(os.getenv('SMARTSEC_FRAME_DIFF_THRESH', '3.0'))
         self.dynamic_infer_every_n = self.infer_every_n
         self._util_ema = 0.0
         self._last_adapt_ts = time.time()
@@ -342,10 +347,35 @@ class AIDetector:
         return frame
 
     def _send_frame(self, frame):
-        if self.frame_callback:
-            _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.stream_jpeg_quality])
-            b64 = base64.b64encode(buf).decode("utf-8")
-            self.frame_callback(self.camera_id, b64)
+        if not self.frame_callback:
+            return
+
+        try:
+            # Compare downscaled grayscale version with last sent frame to avoid
+            # emitting identical/near-identical frames which overload the socket.
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            H, W = gray.shape
+            cmp_w = min(320, W)
+            cmp_h = max(1, int(H * (cmp_w / max(1, W))))
+            small = cv2.resize(gray, (cmp_w, cmp_h), interpolation=cv2.INTER_AREA)
+
+            mean_diff = None
+            if self._last_sent_gray is not None and self._last_sent_gray.shape == small.shape:
+                diff = cv2.absdiff(small, self._last_sent_gray)
+                mean_diff = float(diff.mean())
+
+            if mean_diff is not None and mean_diff < self.frame_change_threshold:
+                # Skip emitting unchanged frame
+                return
+
+            self._last_sent_gray = small
+        except Exception:
+            # If comparison fails for any reason, fall back to always emitting
+            pass
+
+        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.stream_jpeg_quality])
+        b64 = base64.b64encode(buf).decode("utf-8")
+        self.frame_callback(self.camera_id, b64)
 
     def _maybe_alert(self, label, conf, threat_level):
         now = time.time()

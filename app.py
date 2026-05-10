@@ -29,7 +29,11 @@ state = {
 }
 _lock = threading.Lock()
 _emit_lock = threading.Lock()  # Serialize SocketIO emissions to prevent concurrent writes
-FRAME_EMIT_INTERVAL_SECONDS = 1.0 / 12.0  # 12 FPS
+# Frame emit throttle (clients expect base64 JPEG frames). Reduce default to 6 FPS to
+# lower CPU + network load; configurable via env `SMARTSEC_EMIT_FPS`.
+FRAME_EMIT_FPS = int(max(1, int(os.getenv('SMARTSEC_EMIT_FPS', '6'))))
+FRAME_EMIT_INTERVAL_SECONDS = 1.0 / float(FRAME_EMIT_FPS)
+print(f"[APP] Frame emit FPS set to {FRAME_EMIT_FPS} (interval={FRAME_EMIT_INTERVAL_SECONDS:.3f}s)")
 
 ALLOWED_MODES = {"SIMPLE", "ALERT"}
 
