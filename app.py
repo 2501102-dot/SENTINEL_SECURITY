@@ -8,13 +8,6 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 
-# Disable eventlet's multiple-reader prevention to allow concurrent frame emissions
-try:
-    import eventlet
-    eventlet.debug.hub_prevent_multiple_readers(False)
-except Exception:
-    pass
-
 import database as db
 import mqtt_client as mqtt
 from ai_detector import AIDetector

@@ -33,5 +33,5 @@ EXPOSE 5000
 # Set production environment
 ENV FLASK_ENV=production
 
-# Run application with gunicorn and eventlet worker (production-safe)
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "--timeout", "300", "--access-logfile", "-", "main:app"]
+# Run application with gunicorn and gevent worker (compatible with SocketIO + threading)
+CMD ["gunicorn", "--worker-class", "gevent", "-w", "1", "--bind", "0.0.0.0:5000", "--timeout", "300", "--access-logfile", "-", "main:app"]
