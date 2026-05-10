@@ -331,7 +331,6 @@ def start_detectors():
         time.sleep(0.4)
 
 def start_system():
-    ensure_demo_videos()
     load_camera_sources()
     db.init_db()
     db.log_system_event("System started")
@@ -356,14 +355,12 @@ if __name__ == "__main__":
 
 @app.route('/admin/refresh_videos', methods=['POST'])
 def admin_refresh_videos():
-    """Admin endpoint: refresh demo videos and restart detectors.
+    """Admin endpoint: refresh detectors without downloading videos.
 
-    Call this after deploy to force download fresh demo clips and restart
-    the AI detector threads without redeploying the container.
+    Call this to restart the AI detector threads without redeploying.
     """
-    ok = ensure_demo_videos()
     load_camera_sources()
     stop_detectors()
     t = threading.Thread(target=start_detectors, daemon=True)
     t.start()
-    return jsonify({"ok": ok})
+    return jsonify({"ok": True})
