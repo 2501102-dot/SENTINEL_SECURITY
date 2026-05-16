@@ -9,3 +9,4 @@ __pycache__
 .DS_Store
 security_logs.db
 .env
+# This keeps local secrets out of container builds.

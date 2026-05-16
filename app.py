@@ -1,9 +1,7 @@
-# Main Flask server - handles dashboard, WebSocket streams, API endpoints
-
+# SENTINEL Smart Security System - Flask Dashboard & API
 import time
 import threading
 import os
-import urllib.request
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
@@ -17,26 +15,19 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = "smartsec_2025"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-# Global state
 state = {
-    "cameras": {},
-    "alerts": [],
-    "threat_level": "SAFE",
-    "mqtt_connected": False,
-    "total_alerts": 0,
+    "cameras": {}, "alerts": [], "threat_level": "SAFE",
+    "mqtt_connected": False, "total_alerts": 0,
     "system_start": time.time(),
     "mode": os.getenv("SMARTSEC_MODE", "SIMPLE").strip().upper(),
 }
+
 _lock = threading.Lock()
-_emit_lock = threading.Lock()  # Serialize SocketIO emissions to prevent concurrent writes
-# Frame emit throttle (clients expect base64 JPEG frames). Reduce default to 6 FPS to
-# lower CPU + network load; configurable via env `SMARTSEC_EMIT_FPS`.
-FRAME_EMIT_FPS = int(max(1, int(os.getenv('SMARTSEC_EMIT_FPS', '6'))))
-FRAME_EMIT_INTERVAL_SECONDS = 1.0 / float(FRAME_EMIT_FPS)
-print(f"[APP] Frame emit FPS set to {FRAME_EMIT_FPS} (interval={FRAME_EMIT_INTERVAL_SECONDS:.3f}s)")
+_emit_lock = threading.Lock()
+FRAME_EMIT_FPS = 5
+FRAME_EMIT_INTERVAL = 1.0 / FRAME_EMIT_FPS
 
 ALLOWED_MODES = {"SIMPLE", "ALERT"}
-
 CAMERAS_CONFIG = [
     {"id": "CAM-01", "label": "Main Entrance", "source": "videos/demo1.mp4"},
     {"id": "CAM-02", "label": "Parking Zone", "source": "videos/demo2.mp4"},
@@ -44,147 +35,33 @@ CAMERAS_CONFIG = [
     {"id": "CAM-04", "label": "Emergency Exit", "source": "videos/demo4.mp4"},
 ]
 
-DEMO_VIDEO_URLS = [
-    "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
-    "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
-    "https://samplelib.com/lib/preview/mp4/sample-15s.mp4",
-    "https://samplelib.com/lib/preview/mp4/sample-20s.mp4",
-]
-
-DEMO_VIDEO_FILES = [
-    "videos/demo1.mp4",
-    "videos/demo2.mp4",
-    "videos/demo3.mp4",
-    "videos/demo4.mp4",
-]
-
-def _coerce_camera_source(value):
-    # Convert string numbers to int, keep paths/URLs as strings
-    s = str(value).strip()
-    return int(s) if s.isdigit() else s
-
-
-def _resolve_source_path(source):
-    # Handle webcam index, RTSP, HTTP, or local file path
-    if isinstance(source, int):
+def load_source_path(source):
+    """Convert source string to absolute path"""
+    if isinstance(source, int) or str(source).lower().startswith(("rtsp://", "http://")):
         return source
-
-    s = str(source).strip()
-    lower = s.lower()
-    if lower.startswith(("rtsp://", "http://", "https://")):
-        return s
-
-    if os.path.isabs(s):
-        return os.path.normpath(s)
-
-    base_dir = os.path.dirname(__file__)
-    return os.path.normpath(os.path.join(base_dir, s))
-
-
-def _download_file(url, dst_path):
-    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-    headers = {"User-Agent": "Mozilla/5.0"}
-    req = urllib.request.Request(url, headers=headers)
-    tmp_path = f"{dst_path}.tmp"
-    with urllib.request.urlopen(req, timeout=60) as response, open(tmp_path, "wb") as out:
-        out.write(response.read())
-    os.replace(tmp_path, dst_path)
-
-
-def ensure_demo_videos():
-    base_dir = os.path.dirname(__file__)
-    download_ok = True
-    target_files = {os.path.normpath(os.path.join(base_dir, rel_path)) for rel_path in DEMO_VIDEO_FILES}
-
-    legacy_files = [
-        os.path.normpath(os.path.join(base_dir, "videos/demo-01.mp4")),
-        os.path.normpath(os.path.join(base_dir, "videos/demo-02.mp4")),
-        os.path.normpath(os.path.join(base_dir, "videos/demo-03.mp4")),
-        os.path.normpath(os.path.join(base_dir, "videos/demo-04.mp4")),
-    ]
-
-    for legacy_path in legacy_files:
-        if os.path.exists(legacy_path) and legacy_path not in target_files:
-            try:
-                os.remove(legacy_path)
-                print(f"[APP] Removed legacy demo video: {os.path.relpath(legacy_path, base_dir)}")
-            except Exception as exc:
-                print(f"[APP] Could not remove legacy demo video {legacy_path}: {exc}")
-
-    for rel_path, url in zip(DEMO_VIDEO_FILES, DEMO_VIDEO_URLS):
-        abs_path = os.path.normpath(os.path.join(base_dir, rel_path))
-        print(f"[APP] Refreshing demo video: {rel_path}")
-        try:
-            _download_file(url, abs_path)
-            print(f"[APP] Saved demo video: {rel_path}")
-        except Exception as exc:
-            download_ok = False
-            print(f"[APP] Failed to download {url}: {exc}")
-
-    return download_ok
-
-
-def load_camera_sources():
-    # Load camera sources from camera_sources.txt (one per line)
-    # Can be: 0 (webcam), /path/to/video.mp4, or rtsp://...
-    raw_sources = []
-
-    cfg_path = os.path.join(os.path.dirname(__file__), "camera_sources.txt")
-    if os.path.exists(cfg_path):
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            raw_sources = [
-                line.strip() for line in f
-                if line.strip() and not line.strip().startswith("#")
-            ]
-
-    env_value = os.getenv("SMARTSEC_CAMERA_SOURCES", "").strip()
-    if env_value:
-        print("[APP] SMARTSEC_CAMERA_SOURCES env var is set but camera_sources.txt takes priority")
-
-    if not raw_sources:
-        raw_sources = DEMO_VIDEO_FILES[:]
-
-    sources = [_resolve_source_path(_coerce_camera_source(v)) for v in raw_sources]
-    for idx, cam in enumerate(CAMERAS_CONFIG):
-        cam["source"] = sources[idx] if idx < len(sources) else sources[-1]
-
-    print(f"[APP] Loaded {len(sources)} camera source(s)")
-    for cam in CAMERAS_CONFIG:
-        src = cam["source"]
-        if isinstance(src, str) and not src.lower().startswith(("rtsp://", "http://", "https://")):
-            exists = os.path.exists(src)
-            size_info = ""
-            if exists:
-                size_mb = os.path.getsize(src) / (1024*1024)
-                size_info = f" ({size_mb:.1f}MB)"
-            print(f"[APP]  {cam['id']}: {src} (exists={exists}){size_info}")
-        else:
-            print(f"[APP]  {cam['id']}: {src}")
+    path = str(source).strip()
+    if not os.path.isabs(path):
+        path = os.path.join(os.path.dirname(__file__), path)
+    return os.path.normpath(path)
 
 detectors = []
 notifier = NotificationService()
 
-
 def stop_detectors():
-    """Stop and clear all running AI detector threads."""
+    """Stop all AI detectors"""
     global detectors
     for d in list(detectors):
         try:
             d.stop()
-        except Exception:
+        except:
             pass
     detectors = []
 
+state["mode"] = state["mode"] if state["mode"] in ALLOWED_MODES else "SIMPLE"
 
-def _normalize_mode(value):
-    mode = str(value or "").strip().upper()
-    return mode if mode in ALLOWED_MODES else "SIMPLE"
-
-state["mode"] = _normalize_mode(state["mode"])
-
-# Callbacks for AI detector
+# Callbacks
 def on_alert(camera_id, event_type, confidence, details, threat_level):
-    # Called when AI detector finds a threat
+    """Handle alert from AI detector"""
     if state["mode"] != "ALERT":
         return
 
@@ -207,44 +84,35 @@ def on_alert(camera_id, event_type, confidence, details, threat_level):
         state["alerts"].insert(0, alert)
         state["alerts"] = state["alerts"][:100]
 
-    # Log to database
     db.log_alert(camera_id, event_type, confidence, details, threat_level)
-
-    # Publish to MQTT
     mqtt.publish_alert(camera_id, event_type, confidence, details, threat_level)
-
-    # Send notifications if enabled
+    
     if str(event_type).lower() == "person":
         notifier.notify_intrusion(camera_id, confidence, threat_level, details)
 
-    # Broadcast to dashboard clients
     with _emit_lock:
         socketio.emit("new_alert", alert)
-        socketio.emit("threat_update", {
-            "level": state["threat_level"],
-            "total": state["total_alerts"]
-        })
+        socketio.emit("threat_update", {"level": state["threat_level"], "total": state["total_alerts"]})
 
 
 def on_frame(camera_id, frame_b64):
-    # Called by AI detector with each frame (base64 encoded JPEG)
+    """Handle frame from AI detector"""
     now = time.time()
     with _lock:
         if camera_id not in state["cameras"]:
             state["cameras"][camera_id] = {"last_emit_ts": 0.0}
         state["cameras"][camera_id]["frame"] = frame_b64
         state["cameras"][camera_id]["ts"] = now
-
+        
         last_emit = state["cameras"][camera_id].get("last_emit_ts", 0.0)
-        should_emit = (now - last_emit) >= FRAME_EMIT_INTERVAL_SECONDS
-        if should_emit:
-            state["cameras"][camera_id]["last_emit_ts"] = now
+        should_emit = (now - last_emit) >= FRAME_EMIT_INTERVAL
 
     if should_emit:
+        state["cameras"][camera_id]["last_emit_ts"] = now
         with _emit_lock:
             socketio.emit("frame_update", {"camera_id": camera_id, "frame": frame_b64})
 
-# API Routes
+# Routes
 @app.route("/")
 def index():
     return render_template("index.html", cameras=CAMERAS_CONFIG)
@@ -252,8 +120,7 @@ def index():
 @app.route("/api/state")
 def api_state():
     uptime = int(time.time() - state["system_start"])
-    h, rem = divmod(uptime, 3600)
-    m, s = divmod(rem, 60)
+    h, m, s = uptime // 3600, (uptime % 3600) // 60, uptime % 60
     return jsonify({
         "threat_level": state["threat_level"],
         "mode": state["mode"],
@@ -262,10 +129,7 @@ def api_state():
         "mqtt_connected": mqtt.is_connected(),
         "cameras_active": len(CAMERAS_CONFIG),
         "uptime": f"{h:02d}:{m:02d}:{s:02d}",
-        "notifier_ready": notifier.enabled,
-        "recent_alerts": state["alerts"][:20],
     })
-
 
 @app.route("/api/reset_threat")
 def reset_threat():
@@ -279,119 +143,85 @@ def reset_threat():
 def api_mode():
     if request.method == "GET":
         return jsonify({"mode": state["mode"]})
-
-    payload = request.get_json(silent=True) or {}
-    mode = _normalize_mode(payload.get("mode"))
+    
+    mode = request.get_json(silent=True).get("mode", "SIMPLE").upper() if request.get_json(silent=True) else "SIMPLE"
+    mode = mode if mode in ALLOWED_MODES else "SIMPLE"
+    
     with _lock:
         state["mode"] = mode
         if mode == "SIMPLE":
             state["threat_level"] = "SAFE"
-
+    
     with _emit_lock:
         socketio.emit("mode_update", {"mode": state["mode"]})
-        socketio.emit("threat_update", {
-            "level": state["threat_level"],
-            "total": state["total_alerts"]
-        })
+        socketio.emit("threat_update", {"level": state["threat_level"], "total": state["total_alerts"]})
+    
     return jsonify({"ok": True, "mode": state["mode"]})
 
 @app.route("/api/alerts")
 def api_alerts():
-    limit = int(request.args.get("limit", 200))
-    limit = max(1, min(limit, 500))
-    rows = db.get_recent_alerts(limit=limit)
-
-    alerts = []
-    for r in rows:
-        alerts.append({
-            "id": r[0],
-            "timestamp": r[1],
-            "camera_id": r[3],
-            "event_type": r[4],
-            "confidence": round(float(r[5]) * 100) if r[5] is not None else 0,
-            "details": r[6] or "",
-            "threat_level": r[7] or "LOW",
-        })
+    limit = min(int(request.args.get("limit", 200)), 500)
+    rows = db.get_recent_alerts(limit)
+    alerts = [{
+        "id": r[0], "timestamp": r[1], "camera_id": r[3],
+        "event_type": r[4], "confidence": round(float(r[5] or 0) * 100),
+        "details": r[6] or "", "threat_level": r[7] or "LOW",
+    } for r in rows]
     return jsonify({"alerts": alerts})
 
-@app.route("/api/test_notification", methods=["POST"])
-def api_test_notification():
-    result = notifier.send_test_message()
-    code = 200 if result.get("ok") else 400
-    return jsonify(result), code
-
-@app.route("/api/health", methods=["GET"])
+@app.route("/api/health")
 def api_health():
-    """Health check endpoint: verify videos exist and cameras are configured."""
-    cameras_status = []
-    for cam in CAMERAS_CONFIG:
-        src = cam["source"]
-        if isinstance(src, str) and not src.lower().startswith(("rtsp://", "http://", "https://")):
-            exists = os.path.exists(src)
-            size_mb = 0
-            if exists:
-                size_mb = round(os.path.getsize(src) / (1024*1024), 2)
-            cameras_status.append({
-                "id": cam["id"],
-                "label": cam["label"],
-                "source": src,
-                "exists": exists,
-                "size_mb": size_mb if exists else None
-            })
-        else:
-            cameras_status.append({
-                "id": cam["id"],
-                "label": cam["label"],
-                "source": src,
-                "exists": "remote_stream"
-            })
-    
+    """Health check for deployment"""
     return jsonify({
         "status": "ok",
         "mode": state["mode"],
-        "cameras": cameras_status,
-        "detectors_running": len(detectors)
+        "detectors": len(detectors),
+        "mqtt": mqtt.is_connected(),
     })
 
-# WebSocket events
+# WebSocket
 @socketio.on("connect")
 def on_connect():
     emit("mode_update", {"mode": state["mode"]})
-    emit("threat_update", {
-        "level": state["threat_level"],
-        "total": state["total_alerts"]
-    })
+    emit("threat_update", {"level": state["threat_level"], "total": state["total_alerts"]})
+    emit("mqtt_status", {"connected": mqtt.is_connected()})
 
-
+# System Startup
 def start_detectors():
-    # Start one AI detector per camera in parallel
+    """Start AI detectors for all cameras"""
     for cfg in CAMERAS_CONFIG:
         d = AIDetector(
-            source=cfg["source"],
-            camera_id=cfg["id"],
-            alert_callback=on_alert,
-            frame_callback=on_frame,
+            source=cfg["source"], camera_id=cfg["id"],
+            alert_callback=on_alert, frame_callback=on_frame,
         )
         d.start()
         detectors.append(d)
-        time.sleep(0.4)
+        time.sleep(0.3)
 
 def start_system():
-    load_camera_sources()
+    """Initialize and start all services"""
     db.init_db()
-    db.log_system_event("System started")
     mqtt.init_mqtt()
     notifier.log_status()
-    time.sleep(1)
-
-    # Start AI detectors in background
+    time.sleep(0.5)
+    
     t = threading.Thread(target=start_detectors, daemon=True)
     t.start()
-
-    print("\n" + "="*55)
-    print("  🛡  SMART SECURITY SYSTEM — DASHBOARD READY")
-    print("  Open your browser:  http://127.0.0.1:5000")
-    print("="*55 + "\n")
+    
+    # Start MQTT status broadcast thread
+    def broadcast_mqtt_status():
+        while True:
+            time.sleep(5)
+            with _emit_lock:
+                socketio.emit("mqtt_status", {"connected": mqtt.is_connected()})
+    
+    t_mqtt = threading.Thread(target=broadcast_mqtt_status, daemon=True)
+    t_mqtt.start()
+    
+    print("\n" + "="*50)
+    print("  🛡  SMART SECURITY SYSTEM — READY")
+    print("  http://127.0.0.1:5000")
+    print("="*50 + "\n")
 
 
 if __name__ == "__main__":
@@ -405,7 +235,6 @@ def admin_refresh_videos():
 
     Call this to restart the AI detector threads without redeploying.
     """
-    load_camera_sources()
     stop_detectors()
     t = threading.Thread(target=start_detectors, daemon=True)
     t.start()

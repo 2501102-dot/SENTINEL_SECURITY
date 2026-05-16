@@ -3,6 +3,8 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
+# You do not need Docker to run this project locally for your submission.
+
 # Install system dependencies required for OpenCV and other libraries
 RUN apt-get update && apt-get install -y \
     libgl1 \

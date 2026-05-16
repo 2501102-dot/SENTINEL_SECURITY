@@ -3,3 +3,5 @@
 __pycache__/
 *.py[cod]
 *.db
+
+# Keep secret keys and local virtual environments out of version control.
