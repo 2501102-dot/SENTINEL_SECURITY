@@ -1,0 +1,12 @@
+{
+  "TELEGRAM_BOT_TOKEN": "your_telegram_bot_token_here",
+  "TELEGRAM_CHAT_ID": "your_telegram_chat_id_here",
+  "ENABLE_TELEGRAM_MESSAGE": "1",
+  "ENABLE_WHATSAPP_MESSAGE": "1",
+  "ULTRAMSG_INSTANCE_ID": "your_instance_id_here",
+  "ULTRAMSG_TOKEN": "your_ultramsg_token_here",
+  "ULTRAMSG_TO": "+1234567890",
+  "CALLMEBOT_PHONE": "+1234567890",
+  "CALLMEBOT_APIKEY": "",
+  "NOTIFY_COOLDOWN_SECONDS": "15"
+}

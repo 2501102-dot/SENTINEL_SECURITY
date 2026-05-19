@@ -3,5 +3,6 @@
 __pycache__/
 *.py[cod]
 *.db
+notification_config.json
 
 # Keep secret keys and local virtual environments out of version control.
