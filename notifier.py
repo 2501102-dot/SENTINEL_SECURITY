@@ -89,7 +89,7 @@ class NotificationService:
         
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conf = round(float(confidence) * 100)
-        msg = f"🚨 SECURITY ALERT\n📷 Camera: {camera_id}\n⚠️ Threat: {threat_level}\n📊 Confidence: {conf}%\n🕐 Time: {ts}"
+        msg = f" SECURITY ALERT\n📷 Camera: {camera_id}\n Threat: {threat_level}\n Confidence: {conf}%\n Time: {ts}"
         
         # Send via Telegram if enabled
         if self.telegram_enabled and self.telegram_token and self.telegram_chat_id:
